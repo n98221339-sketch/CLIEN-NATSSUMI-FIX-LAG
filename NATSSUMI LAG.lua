@@ -1,6 +1,6 @@
 -- ============================================================
--- NATSUMI LAG CLIENT v5.0 - PREMIUM AESTHETIC UPDATE
--- (Giao diện Gradient Siêu Mượt + Tối ưu Network/Ping)
+-- NATSUMI LAG CLIENT v5.2 - PREMIUM + ANTI INVISIBLE
+-- (Giao diện Gradient Siêu Mượt + Tối ưu Network/Ping + Box Chống Tàng Hình)
 -- ============================================================
 
 if not game:IsLoaded() then game.Loaded:Wait() end
@@ -44,13 +44,11 @@ local function GetPing() local ok, v = pcall(function() return game:GetService("
 
 -- ================== CHỨC NĂNG GIẢM LAG & PING ==================
 local function OptimizePing()
-    -- Xóa các vật phẩm rơi vãi, rác hệ thống gây tắc nghẽn gói tin mạng
     for _, v in ipairs(Workspace:GetChildren()) do
         if v.Name == "Debris" or (v:IsA("Tool") and not v.Parent:FindFirstChild("Humanoid")) then
             pcall(function() v:Destroy() end)
         end
     end
-    -- Ép giải phóng bộ nhớ để xử lý mạng mượt hơn
     for i=1, 5 do task.spawn(function() local a={} setmetatable(a,{__mode="v"}) end) end
 end
 
@@ -101,7 +99,7 @@ local function ApplyBoost(level)
     if level == 100 then RemoveTextures() Lighting.Brightness = 2 Lighting.ClockTime = 14 Lighting.FogEnd = 250 settings().Rendering.QualityLevel = Enum.QualityLevel.Level01 CurrentBoost = 100 end
 end
 
--- ================== ESP & AIMBOT (GIỮ NGUYÊN BẢN V4.6 SIÊU MƯỢT) ==================
+-- ================== ESP & AIMBOT (BOX CHỐNG TÀNG HÌNH & ÉP SÁNG) ==================
 local function IsPlayerChar(m) for _, p in ipairs(Players:GetPlayers()) do if p.Character == m and p ~= LocalPlayer then return true end end return false end
 local function IsNPC(m) return not IsPlayerChar(m) and m:FindFirstChildOfClass("Humanoid") and m:FindFirstChild("HumanoidRootPart") end
 
@@ -113,28 +111,53 @@ local function AddESP(m)
     local isPlayer = IsPlayerChar(m)
     local espColor = isPlayer and Color3.fromRGB(50,255,50) or Color3.fromRGB(255,50,50)
 
-    -- Hiệu ứng viền (Sẽ bị ẩn nếu người chơi tàng hình)
-    local hl = Instance.new("Highlight", m) 
+    -- Ánh sáng viền (Có ép sáng người tàng hình)
+    local hl = Instance.new("Highlight") 
     hl.FillColor = espColor 
-    hl.OutlineColor = Color3.fromRGB(255,220,0) 
-    hl.FillTransparency = 0.5 
+    hl.OutlineColor = Color3.fromRGB(255,255,255)
+    hl.FillTransparency = 0.4 
     hl.OutlineTransparency = 0 
     hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    hl.Parent = m
     
-    -- Khối hộp 3D (Luôn hiện dù tàng hình)
+    -- Khối hộp 3D dự phòng xuyên tường
     local box = Instance.new("BoxHandleAdornment")
     box.Size = Vector3.new(4, 5.5, 2)
     box.Adornee = root
     box.AlwaysOnTop = true
     box.ZIndex = 10
     box.Color3 = espColor
-    box.Transparency = 0.6
-    box.Parent = root
+    box.Transparency = 0.4
+    box.Parent = TargetGui
 
     -- Tên và Khoảng cách
-    local bb = Instance.new("BillboardGui", m) bb.Adornee = root bb.Size = UDim2.new(0,120,0,36) bb.StudsOffset = Vector3.new(0,3.5,0) bb.AlwaysOnTop = true bb.MaxDistance = 500
-    local nl = Instance.new("TextLabel", bb) nl.Size = UDim2.new(1,0,0.55,0) nl.BackgroundTransparency = 1 nl.Text = m.Name nl.TextColor3 = Color3.fromRGB(255,255,255) nl.TextSize = 13 nl.Font = Enum.Font.GothamBold nl.TextStrokeTransparency = 0 nl.Visible = ESPNameOn
-    local dl = Instance.new("TextLabel", bb) dl.Size = UDim2.new(1,0,0.45,0) dl.Position = UDim2.new(0,0,0.55,0) dl.BackgroundTransparency = 1 dl.Text = "0m" dl.TextColor3 = Color3.fromRGB(0,255,255) dl.TextSize = 11 dl.Font = Enum.Font.Gotham dl.Visible = ESPDistOn
+    local bb = Instance.new("BillboardGui") 
+    bb.Adornee = root 
+    bb.Size = UDim2.new(0,120,0,36) 
+    bb.StudsOffset = Vector3.new(0,3.5,0) 
+    bb.AlwaysOnTop = true 
+    bb.MaxDistance = 500
+    bb.Parent = TargetGui
+    
+    local nl = Instance.new("TextLabel", bb) 
+    nl.Size = UDim2.new(1,0,0.55,0) 
+    nl.BackgroundTransparency = 1 
+    nl.Text = m.Name 
+    nl.TextColor3 = Color3.fromRGB(255,255,255) 
+    nl.TextSize = 13 
+    nl.Font = Enum.Font.GothamBold 
+    nl.TextStrokeTransparency = 0 
+    nl.Visible = ESPNameOn
+    
+    local dl = Instance.new("TextLabel", bb) 
+    dl.Size = UDim2.new(1,0,0.45,0) 
+    dl.Position = UDim2.new(0,0,0.55,0) 
+    dl.BackgroundTransparency = 1 
+    dl.Text = "0m" 
+    dl.TextColor3 = espColor
+    dl.TextSize = 11 
+    dl.Font = Enum.Font.Gotham 
+    dl.Visible = ESPDistOn
     
     ESPObjects[m] = {HL=hl, BOX=box, BB=bb, NL=nl, DL=dl}
     m.AncestryChanged:Connect(function() 
@@ -161,8 +184,18 @@ local function StartESP()
     ESPLoop = Track(RunService.Heartbeat:Connect(function()
         local myRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
         for m, d in pairs(ESPObjects) do
-            local hum = m:FindFirstChildOfClass("Humanoid") local nRoot = m:FindFirstChild("HumanoidRootPart")
-            if not m.Parent or not nRoot or (hum and hum.Health <= 0) then pcall(function() d.HL:Destroy() if d.BOX then d.BOX:Destroy() end d.BB:Destroy() end) ESPObjects[m] = nil continue end
+            local hum = m:FindFirstChildOfClass("Humanoid") 
+            local nRoot = m:FindFirstChild("HumanoidRootPart")
+            
+            if not m.Parent or not nRoot or (hum and hum.Health <= 0) then 
+                pcall(function() d.HL:Destroy() if d.BOX then d.BOX:Destroy() end d.BB:Destroy() end) 
+                ESPObjects[m] = nil 
+                continue 
+            end
+            
+            -- [MẸO ÉP ÁNH SÁNG HIỂN THỊ TRÊN NGƯỜI TÀNG HÌNH]
+            if nRoot.Transparency == 1 then nRoot.Transparency = 0.99 end
+            
             if myRoot and d.DL then d.DL.Text = math.floor((myRoot.Position - nRoot.Position).Magnitude).."m" d.DL.Visible = ESPDistOn end
             if d.NL then d.NL.Visible = ESPNameOn end
         end
@@ -212,18 +245,13 @@ local function ToggleAimbot(state)
     end))
 end
 
--- ================== GIAO DIỆN MỚI (PREMIUM) ==================
+-- ================== GIAO DIỆN PREMIUM ==================
 local MainGui = Instance.new("ScreenGui") MainGui.Name = "NatsumiLag" MainGui.ResetOnSpawn = false MainGui.DisplayOrder = 100 MainGui.Parent = TargetGui
 
--- Bảng màu Gradient & Dark Theme cực ngầu
 local C = { 
-    BG = Color3.fromRGB(15, 15, 20),      -- Đen sâu
-    Panel = Color3.fromRGB(24, 24, 30),   -- Xám xanh tối
-    Tab = Color3.fromRGB(30, 30, 38),     -- Tab tĩnh
-    Text = Color3.fromRGB(245, 245, 250), -- Trắng sáng
-    TextDim = Color3.fromRGB(130, 130, 150), 
-    Grad1 = Color3.fromRGB(0, 255, 170),  -- Xanh Neon
-    Grad2 = Color3.fromRGB(0, 170, 255)   -- Xanh Dương Neon
+    BG = Color3.fromRGB(15, 15, 20), Panel = Color3.fromRGB(24, 24, 30), Tab = Color3.fromRGB(30, 30, 38),
+    Text = Color3.fromRGB(245, 245, 250), TextDim = Color3.fromRGB(130, 130, 150), 
+    Grad1 = Color3.fromRGB(0, 255, 170), Grad2 = Color3.fromRGB(0, 170, 255)
 }
 
 local function SmoothTween(obj, props, time) TweenService:Create(obj, TweenInfo.new(time or 0.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), props):Play() end
@@ -235,18 +263,16 @@ local function AddGradient(parent)
     return g
 end
 
--- Main Frame (Đổ bóng xịn)
 local Main = Create("Frame", MainGui, {Size=UDim2.new(0,350,0,460), Position=UDim2.new(0.5,-175,0.5,-230), BackgroundColor3=C.BG, ClipsDescendants=true}) Corner(Main, 14)
 local Outline = Create("UIStroke", Main, {Thickness=1.5}) AddGradient(Outline)
 
--- Drag UI mượt
 local drag, dStart, sPos Main.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then drag=true dStart=i.Position sPos=Main.Position end end)
 Main.InputChanged:Connect(function(i) if drag and i.UserInputType == Enum.UserInputType.MouseMovement then local d=i.Position-dStart Main.Position=UDim2.new(sPos.X.Scale, sPos.X.Offset+d.X, sPos.Y.Scale, sPos.Y.Offset+d.Y) end end)
 Main.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then drag=false end end)
 
 local TitleBar = Create("Frame", Main, {Size=UDim2.new(1,0,0,40), BackgroundColor3=C.Panel, BackgroundTransparency=0.5})
-local TitleText = Create("TextLabel", TitleBar, {Size=UDim2.new(1,-80,1,0), Position=UDim2.new(0,16,0,0), BackgroundTransparency=1, Text="Natsumi Client v5.0", Font=Enum.Font.GothamBlack, TextSize=15, TextXAlignment=Enum.TextXAlignment.Left})
-AddGradient(TitleText) -- Tiêu đề phát sáng chuyển màu
+local TitleText = Create("TextLabel", TitleBar, {Size=UDim2.new(1,-80,1,0), Position=UDim2.new(0,16,0,0), BackgroundTransparency=1, Text="Natsumi Client v5.2", Font=Enum.Font.GothamBlack, TextSize=15, TextXAlignment=Enum.TextXAlignment.Left})
+AddGradient(TitleText)
 
 local CloseBtn = Create("TextButton", TitleBar, {Size=UDim2.new(0,28,0,28), Position=UDim2.new(1,-34,0.5,-14), BackgroundColor3=Color3.fromRGB(35,35,45), Text="✕", TextColor3=C.Text, Font=Enum.Font.GothamBold}) Corner(CloseBtn, 8)
 CloseBtn.MouseButton1Click:Connect(function() SmoothTween(Main, {Size=UDim2.new(0,0,0,0)}, 0.3) task.wait(0.3) Main.Visible=false UIVisible=false end)
@@ -254,7 +280,6 @@ CloseBtn.MouseButton1Click:Connect(function() SmoothTween(Main, {Size=UDim2.new(
 local TabBar = Create("Frame", Main, {Size=UDim2.new(1,0,0,36), Position=UDim2.new(0,0,0,40), BackgroundColor3=C.Panel}) Create("UIListLayout", TabBar, {FillDirection=Enum.FillDirection.Horizontal, HorizontalAlignment=Enum.HorizontalAlignment.Center, Padding=UDim.new(0,4)})
 local Content = Create("Frame", Main, {Size=UDim2.new(1,0,1,-80), Position=UDim2.new(0,0,0,80), BackgroundColor3=C.BG})
 
--- Helper tạo Control UI (Layout Order)
 local orderCounter = 0
 local function GetOrder() orderCounter = orderCounter + 1 return orderCounter end
 
@@ -274,9 +299,7 @@ local function MakeTab(name, icon)
     table.insert(tabs, sf) table.insert(tabBtns, btn) return sf
 end
 
-local function MakeTitle(parent, text)
-    Create("TextLabel", parent, {LayoutOrder=GetOrder(), Size=UDim2.new(0,320,0,24), BackgroundTransparency=1, Text=text, TextColor3=C.TextDim, Font=Enum.Font.GothamBold, TextSize=11, TextXAlignment=Enum.TextXAlignment.Left})
-end
+local function MakeTitle(parent, text) Create("TextLabel", parent, {LayoutOrder=GetOrder(), Size=UDim2.new(0,320,0,24), BackgroundTransparency=1, Text=text, TextColor3=C.TextDim, Font=Enum.Font.GothamBold, TextSize=11, TextXAlignment=Enum.TextXAlignment.Left}) end
 
 local function MakeBtn(parent, text, cb)
     local btn = Create("TextButton", parent, {LayoutOrder=GetOrder(), Size=UDim2.new(0,320,0,36), BackgroundColor3=C.Panel, Text=text, TextColor3=C.Text, Font=Enum.Font.GothamBold, TextSize=12}) Corner(btn,8)
@@ -292,22 +315,18 @@ end
 local function MakeToggle(parent, text, default, cb)
     local row = Create("Frame", parent, {LayoutOrder=GetOrder(), Size=UDim2.new(0,320,0,40), BackgroundColor3=C.Panel}) Corner(row,8)
     Create("TextLabel", row, {Size=UDim2.new(1,-70,1,0), Position=UDim2.new(0,14,0,0), BackgroundTransparency=1, Text=text, TextColor3=C.Text, Font=Enum.Font.GothamMedium, TextSize=12, TextXAlignment=Enum.TextXAlignment.Left})
-    
     local trk = Create("Frame", row, {Size=UDim2.new(0,44,0,22), Position=UDim2.new(1,-54,0.5,-11), BackgroundColor3=default and Color3.fromRGB(255,255,255) or Color3.fromRGB(50,50,65)}) Corner(trk,12)
     local trkGrad = AddGradient(trk) trkGrad.Enabled = default
     local knb = Create("Frame", trk, {Size=UDim2.new(0,18,0,18), Position=default and UDim2.new(1,-20,0.5,-9) or UDim2.new(0,2,0.5,-9), BackgroundColor3=default and C.BG or C.Text}) Corner(knb,10)
-    
     local s = default or false local btn = Create("TextButton", row, {Size=UDim2.new(1,0,1,0), BackgroundTransparency=1, Text=""})
     btn.MouseButton1Click:Connect(function() 
-        s = not s 
-        trkGrad.Enabled = s
+        s = not s trkGrad.Enabled = s
         SmoothTween(knb, {Position=s and UDim2.new(1,-20,0.5,-9) or UDim2.new(0,2,0.5,-9), BackgroundColor3=s and C.BG or C.Text}, 0.2) 
         SmoothTween(trk, {BackgroundColor3=s and Color3.fromRGB(255,255,255) or Color3.fromRGB(50,50,65)}, 0.2) 
         if cb then cb(s) end 
     end)
 end
 
--- ================= TẠO TAB & NỘI DUNG =================
 local T_Stats = MakeTab("Trang Chủ", "🏠") local T_Boost = MakeTab("Giảm Lag", "⚡") local T_ESP = MakeTab("Combat", "🎯") local T_Vis = MakeTab("Bản Đồ", "🌍") local T_Util = MakeTab("Tiện Ích", "🛠")
 tabs[1].Visible=true tabBtns[1].BackgroundColor3=Color3.fromRGB(45,45,55) tabBtns[1].TextColor3=C.Text
 
@@ -316,7 +335,6 @@ MakeTitle(T_Stats, "THÔNG SỐ HỆ THỐNG")
 local stFPS = Create("TextLabel", Create("Frame", T_Stats, {LayoutOrder=GetOrder(), Size=UDim2.new(0,320,0,32), BackgroundColor3=C.Panel}), {Size=UDim2.new(1,0,1,0), BackgroundTransparency=1, TextColor3=C.Text, Font=Enum.Font.GothamBold, TextSize=13}) Corner(stFPS.Parent, 8)
 local stPing = Create("TextLabel", Create("Frame", T_Stats, {LayoutOrder=GetOrder(), Size=UDim2.new(0,320,0,32), BackgroundColor3=C.Panel}), {Size=UDim2.new(1,0,1,0), BackgroundTransparency=1, TextColor3=C.Text, Font=Enum.Font.GothamBold, TextSize=13}) Corner(stPing.Parent, 8)
 Track(RunService.Heartbeat:Connect(function() stFPS.Text=" 🖥 FPS Hiện Tại: "..CurrentFPS stPing.Text=" 📡 Độ Trễ (Ping): "..GetPing().." ms" end))
-
 MakeTitle(T_Stats, "TỐI ƯU HÓA")
 MakeBtn(T_Stats, "🚀 Tối Ưu Mạng & Giảm Delay (Clear Debris)", function() OptimizePing() end)
 MakeToggle(T_Stats, "Hiện FPS Mini trên Màn Hình", false, function(v) FPSVisible=v if _G.NF then _G.NF.Enabled=v end end)
@@ -328,12 +346,11 @@ MakeBtn(T_Boost, "Tắt Bóng Đổ (25%)", function() ApplyBoost(25) end)
 MakeBtn(T_Boost, "Tắt Hiệu Ứng Skill/Mưa (50%)", function() ApplyBoost(50) end) 
 MakeBtn(T_Boost, "Tắt Sương, Bầu Trời (75%)", function() ApplyBoost(75) end) 
 MakeBtn(T_Boost, "Chế Độ Low-Poly (100%)", function() ApplyBoost(100) end)
-
 MakeTitle(T_Boost, "ĐỔI MÀU LOW-POLY")
 local colors = { {"Trắng Xám", Color3.fromRGB(200,200,200)}, {"Xanh Rêu", Color3.fromRGB(100,160,100)}, {"Màu Đất", Color3.fromRGB(200,185,155)}, {"Màu Đen Ám", Color3.fromRGB(30,30,35)} }
 for _, c in ipairs(colors) do MakeBtn(T_Boost, c[1], function() FLAT_COLOR = c[2] if TextureRemoved then for o in pairs(SavedParts) do if o and o.Parent and o:IsA("BasePart") then SmoothTween(o, {Color=FLAT_COLOR}) end end end end) end
 
--- 3. TAB COMBAT (AIMBOT & ESP)
+-- 3. TAB COMBAT
 MakeTitle(T_ESP, "QUÉT MỤC TIÊU AIMBOT")
 local SelectedLbl = Create("TextLabel", Create("Frame", T_ESP, {LayoutOrder=GetOrder(), Size=UDim2.new(0,320,0,28), BackgroundColor3=C.Panel}), {Size=UDim2.new(1,0,1,0), BackgroundTransparency=1, Text="Mục tiêu: Đang Trống", TextColor3=C.Grad1, Font=Enum.Font.GothamBold, TextSize=13}) Corner(SelectedLbl.Parent, 8)
 local MobListContainer = Create("Frame", T_ESP, {LayoutOrder=GetOrder(), Size=UDim2.new(0,320,0,140), BackgroundColor3=C.Panel}) Corner(MobListContainer, 8)
@@ -355,11 +372,9 @@ MakeBtn(T_ESP, "🔍 Quét Toàn Bộ Map Tìm Quái/Boss", function()
         end
     end
 end)
-
 MakeToggle(T_ESP, "🎯 Bật Khóa Mục Tiêu (Aimbot)", false, ToggleAimbot)
-
 MakeTitle(T_ESP, "HIỂN THỊ XUYÊN TƯỜNG (ESP)")
-MakeToggle(T_ESP, "Bật ESP Tổng", false, function(v) if v then StartESP() else StopESP() end end)
+MakeToggle(T_ESP, "Bật ESP (Có Box Chống Tàng Hình)", false, function(v) if v then StartESP() else StopESP() end end)
 MakeToggle(T_ESP, "Hiển Thị Cả Người Chơi", false, function(v) ESPPlayerOn=v if ESPEnabled then StopESP() StartESP() end end)
 
 -- 4. TAB BẢN ĐỒ
@@ -377,7 +392,7 @@ end)
 MakeTitle(T_Util, "PHÍM TẮT")
 Create("TextLabel", T_Util, {LayoutOrder=GetOrder(), Size=UDim2.new(1,0,0,20), BackgroundTransparency=1, Text="Bấm [RightShift] trên phím để Ẩn/Hiện Menu", TextColor3=C.TextDim, Font=Enum.Font.GothamMedium, TextSize=11, TextXAlignment=Enum.TextXAlignment.Center})
 
--- ================== NÚT ẨN UI (GÓC PHẢI MỚI) ==================
+-- NÚT ẨN UI (GÓC PHẢI)
 local HideGui = Create("ScreenGui", TargetGui, {DisplayOrder=200})
 local HBtn = Create("TextButton", HideGui, {Size=UDim2.new(0,85,0,28), AnchorPoint=Vector2.new(1,0), Position=UDim2.new(1,-10,0,10), BackgroundColor3=C.Panel, Text="👁 Ẩn UI", TextColor3=C.Text, Font=Enum.Font.GothamBold, TextSize=12}) Corner(HBtn,6) 
 local HBtnStroke = Create("UIStroke", HBtn, {Thickness=1.5}) AddGradient(HBtnStroke)
@@ -392,7 +407,7 @@ Track(UserInputService.InputBegan:Connect(function(i,g) if not g and i.KeyCode==
     HBtn.Text = UIVisible and "👁 Ẩn UI" or "✨ Hiện UI" 
 end end))
 
--- [FPS MINI GÓC TRÁI]
+-- FPS MINI GÓC TRÁI
 local FGui = Create("ScreenGui", TargetGui, {DisplayOrder=150, Enabled=false}) _G.NF = FGui
 local FF = Create("Frame", FGui, {Size=UDim2.new(0,105,0,30), Position=UDim2.new(0,10,0,10), BackgroundColor3=C.Panel, BackgroundTransparency=0.2}) Corner(FF,8)
 local FFStroke = Create("UIStroke", FF, {Thickness=1.5}) AddGradient(FFStroke)
@@ -401,8 +416,6 @@ Track(RunService.Heartbeat:Connect(function() if FGui.Enabled then FT.Text="⚡ 
 
 LocalPlayer.AncestryChanged:Connect(function() for _, c in ipairs(AllConns) do if typeof(c)=="RBXScriptConnection" then c:Disconnect() end end pcall(function() MainGui:Destroy() HideGui:Destroy() FGui:Destroy() end) ApplyBoost(0) end)
 
--- Mở hiệu ứng Intro khi load
-Main.Size = UDim2.new(0,0,0,0)
-SmoothTween(Main, {Size=UDim2.new(0,350,0,460)}, 0.5)
+Main.Size = UDim2.new(0,0,0,0) SmoothTween(Main, {Size=UDim2.new(0,350,0,460)}, 0.5)
 
-print("✅ Natsumi Lag v5.0 (Aesthetic UI) Loaded!")
+print("✅ Natsumi Lag v5.2 (Perfect ESP) Loaded!")
