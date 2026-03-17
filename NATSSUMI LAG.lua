@@ -1,6 +1,6 @@
 -- ============================================================
--- NATSUMI LAG CLIENT v5.3 - CUSTOM ESP UPDATE
--- (Thêm nút tùy chọn Hộp Hitbox, Viền Sáng, Tên riêng biệt)
+-- NATSUMI LAG CLIENT v5.4 - PRO AIMBOT MODES
+-- (Đa chế độ Aimbot: Người Chơi / Thủ Công / Tự Động)
 -- ============================================================
 
 if not game:IsLoaded() then game.Loaded:Wait() end
@@ -27,12 +27,13 @@ local CurrentBoost, UIVisible, FPSVisible, CurrentFPS = 0, true, false, 0
 local AllConns, ParticleConns, SavedParts, SavedMeshes, SavedDecals = {}, {}, {}, {}, {}
 local TextureRemoved, FLAT_COLOR = false, Color3.fromRGB(140, 140, 140)
 
--- Thêm biến quản lý ESP Box và Highlight
 local ESPEnabled, ESPPlayerOn = false, false
 local ESPNameOn, ESPDistOn, ESPBoxOn, ESPHighlightOn = true, true, true, true
 local ESPObjects, ESPWatcher, ESPLoop = {}, nil, nil
 
-local AimbotOn, SelectedMobName, AimTarget = false, "", nil
+-- Biến quản lý Đa Chế Độ Aimbot
+local AutoAimbotOn, ManualAimbotOn, PlayerAimbotOn = false, false, false
+local SelectedMobName, AimTarget = "", nil
 local AimScanConn, AimCamConn = nil, nil
 local TargetCache = {}
 
@@ -97,7 +98,7 @@ local function ApplyBoost(level)
     if level == 100 then RemoveTextures() Lighting.Brightness = 2 Lighting.ClockTime = 14 Lighting.FogEnd = 250 settings().Rendering.QualityLevel = Enum.QualityLevel.Level01 CurrentBoost = 100 end
 end
 
--- ================== ESP & AIMBOT (TÙY CHỈNH BOX / HIGHLIGHT) ==================
+-- ================== ESP (CUSTOM ĐẦY ĐỦ) ==================
 local function IsPlayerChar(m) for _, p in ipairs(Players:GetPlayers()) do if p.Character == m and p ~= LocalPlayer then return true end end return false end
 local function IsNPC(m) return not IsPlayerChar(m) and m:FindFirstChildOfClass("Humanoid") and m:FindFirstChild("HumanoidRootPart") end
 
@@ -109,19 +110,16 @@ local function AddESP(m)
     local isPlayer = IsPlayerChar(m)
     local espColor = isPlayer and Color3.fromRGB(50,255,50) or Color3.fromRGB(255,50,50)
 
-    -- Ánh sáng viền
     local hl = Instance.new("Highlight") 
     hl.FillColor = espColor hl.OutlineColor = Color3.fromRGB(255,255,255) hl.FillTransparency = 0.4 hl.OutlineTransparency = 0 hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
     hl.Enabled = ESPHighlightOn
     hl.Parent = m
     
-    -- Khối hộp 3D Hitbox
     local box = Instance.new("BoxHandleAdornment")
     box.Size = Vector3.new(4, 5.5, 2) box.Adornee = root box.AlwaysOnTop = true box.ZIndex = 10 box.Color3 = espColor box.Transparency = 0.4
     box.Visible = ESPBoxOn
     box.Parent = TargetGui
 
-    -- Tên và Khoảng cách
     local bb = Instance.new("BillboardGui") bb.Adornee = root bb.Size = UDim2.new(0,120,0,36) bb.StudsOffset = Vector3.new(0,3.5,0) bb.AlwaysOnTop = true bb.MaxDistance = 500 bb.Parent = TargetGui
     local nl = Instance.new("TextLabel", bb) nl.Size = UDim2.new(1,0,0.55,0) nl.BackgroundTransparency = 1 nl.Text = m.Name nl.TextColor3 = Color3.fromRGB(255,255,255) nl.TextSize = 13 nl.Font = Enum.Font.GothamBold nl.TextStrokeTransparency = 0 nl.Visible = ESPNameOn
     local dl = Instance.new("TextLabel", bb) dl.Size = UDim2.new(1,0,0.45,0) dl.Position = UDim2.new(0,0,0.55,0) dl.BackgroundTransparency = 1 dl.Text = "0m" dl.TextColor3 = espColor dl.TextSize = 11 dl.Font = Enum.Font.Gotham dl.Visible = ESPDistOn
@@ -157,7 +155,6 @@ local function StartESP()
             
             if nRoot.Transparency == 1 then nRoot.Transparency = 0.99 end
             
-            -- Cập nhật trạng thái bật/tắt theo Toggle
             if d.HL then d.HL.Enabled = ESPHighlightOn end
             if d.BOX then d.BOX.Visible = ESPBoxOn end
             if d.NL then d.NL.Visible = ESPNameOn end
@@ -168,33 +165,69 @@ local function StartESP()
     end))
 end
 
+-- ================== AIMBOT 3 CHẾ ĐỘ ==================
 local lastCacheUpdate = 0
-local function ToggleAimbot(state)
-    AimbotOn = state
-    if not state then 
+local function UpdateAimbotState()
+    local anyOn = AutoAimbotOn or ManualAimbotOn or PlayerAimbotOn
+    if not anyOn then 
         if AimScanConn then AimScanConn:Disconnect() AimScanConn = nil end
         if AimCamConn then AimCamConn:Disconnect() AimCamConn = nil end
         AimTarget = nil return 
     end
+    
+    if AimScanConn then return end -- Đã chạy loop rồi thì tự đổi chế độ
+    
     AimScanConn = Track(RunService.Heartbeat:Connect(function()
-        if tick() - lastCacheUpdate > 1 then
+        if tick() - lastCacheUpdate > 0.5 then
             lastCacheUpdate = tick()
             local newCache = {}
-            if SelectedMobName ~= "" then
+            
+            -- Chế độ 1: Ưu tiên Người chơi
+            if PlayerAimbotOn then
+                for _, p in ipairs(Players:GetPlayers()) do
+                    if p ~= LocalPlayer and p.Character then
+                        local r = p.Character:FindFirstChild("HumanoidRootPart")
+                        local h = p.Character:FindFirstChildOfClass("Humanoid")
+                        if r and h and h.Health > 0 then table.insert(newCache, r) end
+                    end
+                end
+                
+            -- Chế độ 2: Đánh thủ công theo tên đã chọn
+            elseif ManualAimbotOn and SelectedMobName ~= "" then
                 for _, o in ipairs(Workspace:GetDescendants()) do
                     if o:IsA("Model") and o.Name == SelectedMobName then
-                        local r = o:FindFirstChild("HumanoidRootPart") local h = o:FindFirstChildOfClass("Humanoid")
+                        local r = o:FindFirstChild("HumanoidRootPart") 
+                        local h = o:FindFirstChildOfClass("Humanoid")
                         if r and h and h.Health > 0 then table.insert(newCache, r) end
+                    end
+                end
+                
+            -- Chế độ 3: Tự động đánh quái vật gần nhất
+            elseif AutoAimbotOn then
+                local function check(o)
+                    if o:IsA("Model") and not Players:GetPlayerFromCharacter(o) then
+                        local r = o:FindFirstChild("HumanoidRootPart")
+                        local h = o:FindFirstChildOfClass("Humanoid")
+                        if r and h and h.Health > 0 then table.insert(newCache, r) end
+                    end
+                end
+                for _, folder in ipairs(Workspace:GetChildren()) do
+                    if folder.Name == "Enemies" or folder.Name == "NPCs" or folder.Name == "Bosses" or folder.Name == "Mobs" then
+                        for _, mob in ipairs(folder:GetChildren()) do check(mob) end
+                    else
+                        check(folder)
                     end
                 end
             end
             TargetCache = newCache
         end
     end))
+    
     AimCamConn = Track(RunService.RenderStepped:Connect(function()
         local myRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
         if not myRoot then return end
-        local nearestDist = 5000 local nearestTgt = nil
+        local nearestDist = 5000 
+        local nearestTgt = nil
         for _, rootPart in ipairs(TargetCache) do
             if rootPart and rootPart.Parent then
                 local h = rootPart.Parent:FindFirstChildOfClass("Humanoid")
@@ -228,7 +261,7 @@ Main.InputChanged:Connect(function(i) if drag and i.UserInputType == Enum.UserIn
 Main.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then drag=false end end)
 
 local TitleBar = Create("Frame", Main, {Size=UDim2.new(1,0,0,40), BackgroundColor3=C.Panel, BackgroundTransparency=0.5})
-local TitleText = Create("TextLabel", TitleBar, {Size=UDim2.new(1,-80,1,0), Position=UDim2.new(0,16,0,0), BackgroundTransparency=1, Text="Natsumi Client v5.3", Font=Enum.Font.GothamBlack, TextSize=15, TextXAlignment=Enum.TextXAlignment.Left}) AddGradient(TitleText)
+local TitleText = Create("TextLabel", TitleBar, {Size=UDim2.new(1,-80,1,0), Position=UDim2.new(0,16,0,0), BackgroundTransparency=1, Text="Natsumi Client v5.4", Font=Enum.Font.GothamBlack, TextSize=15, TextXAlignment=Enum.TextXAlignment.Left}) AddGradient(TitleText)
 local CloseBtn = Create("TextButton", TitleBar, {Size=UDim2.new(0,28,0,28), Position=UDim2.new(1,-34,0.5,-14), BackgroundColor3=Color3.fromRGB(35,35,45), Text="✕", TextColor3=C.Text, Font=Enum.Font.GothamBold}) Corner(CloseBtn, 8)
 CloseBtn.MouseButton1Click:Connect(function() SmoothTween(Main, {Size=UDim2.new(0,0,0,0)}, 0.3) task.wait(0.3) Main.Visible=false UIVisible=false end)
 
@@ -279,13 +312,18 @@ MakeTitle(T_Boost, "ĐỔI MÀU LOW-POLY")
 local colors = { {"Trắng Xám", Color3.fromRGB(200,200,200)}, {"Xanh Rêu", Color3.fromRGB(100,160,100)}, {"Màu Đất", Color3.fromRGB(200,185,155)}, {"Màu Đen Ám", Color3.fromRGB(30,30,35)} }
 for _, c in ipairs(colors) do MakeBtn(T_Boost, c[1], function() FLAT_COLOR = c[2] if TextureRemoved then for o in pairs(SavedParts) do if o and o.Parent and o:IsA("BasePart") then SmoothTween(o, {Color=FLAT_COLOR}) end end end end) end
 
--- 3. TAB COMBAT
-MakeTitle(T_ESP, "QUÉT MỤC TIÊU AIMBOT")
-local SelectedLbl = Create("TextLabel", Create("Frame", T_ESP, {LayoutOrder=GetOrder(), Size=UDim2.new(0,320,0,28), BackgroundColor3=C.Panel}), {Size=UDim2.new(1,0,1,0), BackgroundTransparency=1, Text="Mục tiêu: Đang Trống", TextColor3=C.Grad1, Font=Enum.Font.GothamBold, TextSize=13}) Corner(SelectedLbl.Parent, 8)
+-- 3. TAB COMBAT (CHẾ ĐỘ AIMBOT MỚI)
+MakeTitle(T_ESP, "🔥 CHẾ ĐỘ AIMBOT CHUYÊN SÂU")
+MakeToggle(T_ESP, "👤 Aimbot Người Chơi (Ưu tiên PvP)", false, function(v) PlayerAimbotOn = v UpdateAimbotState() end)
+MakeToggle(T_ESP, "🎯 Aimbot Thủ Công (Đánh theo tên)", false, function(v) ManualAimbotOn = v UpdateAimbotState() end)
+MakeToggle(T_ESP, "🤖 Aimbot Tự Động (Gần Nhất)", false, function(v) AutoAimbotOn = v UpdateAimbotState() end)
+
+MakeTitle(T_ESP, "DANH SÁCH MỤC TIÊU THỦ CÔNG")
+local SelectedLbl = Create("TextLabel", Create("Frame", T_ESP, {LayoutOrder=GetOrder(), Size=UDim2.new(0,320,0,28), BackgroundColor3=C.Panel}), {Size=UDim2.new(1,0,1,0), BackgroundTransparency=1, Text="Đang Chọn: Trống", TextColor3=C.Grad1, Font=Enum.Font.GothamBold, TextSize=13}) Corner(SelectedLbl.Parent, 8)
 local MobListContainer = Create("Frame", T_ESP, {LayoutOrder=GetOrder(), Size=UDim2.new(0,320,0,120), BackgroundColor3=C.Panel}) Corner(MobListContainer, 8)
 local MobScroll = Create("ScrollingFrame", MobListContainer, {Size=UDim2.new(1,0,1,0), BackgroundTransparency=1, ScrollBarThickness=3, AutomaticCanvasSize=Enum.AutomaticSize.Y}) 
 Create("UIListLayout", MobScroll, {Padding=UDim.new(0,6), HorizontalAlignment=Enum.HorizontalAlignment.Center}) Create("UIPadding", MobScroll, {PaddingTop=UDim.new(0,8), PaddingBottom=UDim.new(0,8)})
-MakeBtn(T_ESP, "🔍 Quét Toàn Bộ Map Tìm Quái/Boss", function()
+MakeBtn(T_ESP, "🔍 Quét Cập Nhật Tên Mục Tiêu", function()
     for _, c in ipairs(MobScroll:GetChildren()) do if c:IsA("TextButton") then c:Destroy() end end
     local foundNames = {}
     for _, o in ipairs(Workspace:GetDescendants()) do
@@ -294,22 +332,21 @@ MakeBtn(T_ESP, "🔍 Quét Toàn Bộ Map Tìm Quái/Boss", function()
             if not foundNames[n] then
                 foundNames[n] = true
                 local b = Create("TextButton", MobScroll, {Size=UDim2.new(0,290,0,32), BackgroundColor3=Color3.fromRGB(35,35,45), Text=n, TextColor3=C.Text, Font=Enum.Font.GothamMedium, TextSize=12}) Corner(b, 6)
-                b.MouseButton1Click:Connect(function() SelectedMobName = n SelectedLbl.Text = "Mục tiêu: " .. n TargetCache = {} end)
+                b.MouseButton1Click:Connect(function() SelectedMobName = n SelectedLbl.Text = "Đang Chọn: " .. n TargetCache = {} end)
             end
         end
     end
 end)
-MakeToggle(T_ESP, "🎯 Bật Khóa Mục Tiêu (Aimbot)", false, ToggleAimbot)
 
 MakeTitle(T_ESP, "HIỂN THỊ XUYÊN TƯỜNG (ESP)")
-MakeToggle(T_ESP, "Bật Toàn Bộ Hệ Thống ESP", false, function(v) if v then StartESP() else StopESP() end end)
-MakeToggle(T_ESP, "Bao Gồm Cả Người Chơi Khác", false, function(v) ESPPlayerOn=v if ESPEnabled then StopESP() StartESP() end end)
+MakeToggle(T_ESP, "Bật Hệ Thống ESP Tổng", false, function(v) if v then StartESP() else StopESP() end end)
+MakeToggle(T_ESP, "ESP Cả Người Chơi Khác", false, function(v) ESPPlayerOn=v if ESPEnabled then StopESP() StartESP() end end)
 
 MakeTitle(T_ESP, "TÙY CHỈNH LOẠI ESP")
 MakeToggle(T_ESP, "📦 Hiện Hộp 3D (Hitbox Box)", true, function(v) ESPBoxOn = v end)
 MakeToggle(T_ESP, "✨ Hiện Ánh Sáng (Highlight)", true, function(v) ESPHighlightOn = v end)
 MakeToggle(T_ESP, "🏷️ Hiện Tên Người / Quái", true, function(v) ESPNameOn = v end)
-MakeToggle(T_ESP, "📏 Hiện Cự Ly (Khoảng Cách)", true, function(v) ESPDistOn = v end)
+MakeToggle(T_ESP, "📏 Hiện Cự Ly Khoảng Cách", true, function(v) ESPDistOn = v end)
 
 -- 4. TAB BẢN ĐỒ
 MakeTitle(T_Vis, "TÙY CHỈNH THẾ GIỚI")
@@ -352,4 +389,4 @@ LocalPlayer.AncestryChanged:Connect(function() for _, c in ipairs(AllConns) do i
 
 Main.Size = UDim2.new(0,0,0,0) SmoothTween(Main, {Size=UDim2.new(0,350,0,460)}, 0.5)
 
-print("✅ Natsumi Lag v5.3 (Custom ESP) Loaded!")
+print("✅ Natsumi Lag v5.4 (Pro Modes) Loaded!")
