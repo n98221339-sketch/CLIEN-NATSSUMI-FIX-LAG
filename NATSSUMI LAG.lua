@@ -1,6 +1,6 @@
 -- ============================================================
--- NATSUMI LAG CLIENT v5.5 - ANTI TEAMKILL
--- (Không Aimbot đồng đội + Giao diện siêu mượt)
+-- NATSUMI LAG CLIENT v5.6 - STRICT ANTI TEAMKILL
+-- (Bảo mật kép: Camera từ chối 100% việc khóa vào đồng minh)
 -- ============================================================
 
 if not game:IsLoaded() then game.Loaded:Wait() end
@@ -32,7 +32,7 @@ local ESPNameOn, ESPDistOn, ESPBoxOn, ESPHighlightOn = true, true, true, true
 local ESPObjects, ESPWatcher, ESPLoop = {}, nil, nil
 
 local AutoAimbotOn, ManualAimbotOn, PlayerAimbotOn = false, false, false
-local IgnoreTeammates = true -- Biến chống bắn đồng đội
+local IgnoreTeammates = true -- Mặc định chống bắn đồng đội
 local SelectedMobName, AimTarget = "", nil
 local AimScanConn, AimCamConn = nil, nil
 local TargetCache = {}
@@ -46,34 +46,25 @@ Track(RunService.RenderStepped:Connect(function()
 end))
 local function GetPing() local ok, v = pcall(function() return game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValue() end) return ok and math.floor(v) or 0 end
 
--- ================== CHỨC NĂNG GIẢM LAG & PING ==================
+-- ================== CHỨC NĂNG GIẢM LAG ==================
 local function OptimizePing()
-    for _, v in ipairs(Workspace:GetChildren()) do
-        if v.Name == "Debris" or (v:IsA("Tool") and not v.Parent:FindFirstChild("Humanoid")) then
-            pcall(function() v:Destroy() end)
-        end
-    end
+    for _, v in ipairs(Workspace:GetChildren()) do if v.Name == "Debris" or (v:IsA("Tool") and not v.Parent:FindFirstChild("Humanoid")) then pcall(function() v:Destroy() end) end end
     for i=1, 5 do task.spawn(function() local a={} setmetatable(a,{__mode="v"}) end) end
 end
-
 local function SetParticles(on)
     for _, c in ipairs(ParticleConns) do c:Disconnect() end ParticleConns = {}
     for _, o in ipairs(Workspace:GetDescendants()) do if o:IsA("ParticleEmitter") or o:IsA("Fire") or o:IsA("Smoke") then o.Enabled = on end end
     if not on then table.insert(ParticleConns, Track(Workspace.DescendantAdded:Connect(function(o) if o:IsA("ParticleEmitter") or o:IsA("Fire") then o.Enabled = false end end))) end
 end
 local function SetPostFX(on) for _, e in ipairs(Lighting:GetChildren()) do if e:IsA("BloomEffect") or e:IsA("BlurEffect") or e:IsA("SunRaysEffect") then e.Enabled = on end end end
-
 local FlatWatcher = nil
 local function FlattenObj(o)
     for _, p in ipairs(Players:GetPlayers()) do if p.Character and o:IsDescendantOf(p.Character) then return end end
     if o:IsA("BasePart") and not o:IsA("Terrain") then
         if not SavedParts[o] then SavedParts[o] = { M = o.Material, C = o.Color, S = o.CastShadow } end
         o.Material = Enum.Material.SmoothPlastic o.Color = FLAT_COLOR o.CastShadow = false
-    elseif o:IsA("SpecialMesh") then
-        if not SavedMeshes[o] then SavedMeshes[o] = o.TextureId end o.TextureId = ""
-    elseif o:IsA("Texture") or o:IsA("Decal") then
-        if not SavedDecals[o] then SavedDecals[o] = o.Transparency end o.Transparency = 1
-    end
+    elseif o:IsA("SpecialMesh") then if not SavedMeshes[o] then SavedMeshes[o] = o.TextureId end o.TextureId = ""
+    elseif o:IsA("Texture") or o:IsA("Decal") then if not SavedDecals[o] then SavedDecals[o] = o.Transparency end o.Transparency = 1 end
 end
 local function RemoveTextures()
     if TextureRemoved then return end TextureRemoved = true
@@ -88,7 +79,6 @@ local function RestoreTextures()
     for o, d in pairs(SavedDecals) do if o and o.Parent then o.Transparency = d end end
     SavedParts, SavedMeshes, SavedDecals = {}, {}, {}
 end
-
 local function ApplyBoost(level)
     RestoreTextures() SetParticles(true) SetPostFX(true)
     Lighting.GlobalShadows = Original.GlobalShadows Lighting.FogEnd = Original.FogEnd Lighting.FogStart = Original.FogStart settings().Rendering.QualityLevel = Original.QualityLevel CurrentBoost = 0
@@ -98,54 +88,33 @@ local function ApplyBoost(level)
     if level == 100 then RemoveTextures() Lighting.Brightness = 2 Lighting.ClockTime = 14 Lighting.FogEnd = 250 settings().Rendering.QualityLevel = Enum.QualityLevel.Level01 CurrentBoost = 100 end
 end
 
--- ================== ESP (CUSTOM & ANTI-INVISIBLE) ==================
+-- ================== ESP & TÌM ĐỒNG ĐỘI ==================
 local function IsPlayerChar(m) for _, p in ipairs(Players:GetPlayers()) do if p.Character == m and p ~= LocalPlayer then return true end end return false end
 local function IsNPC(m) return not IsPlayerChar(m) and m:FindFirstChildOfClass("Humanoid") and m:FindFirstChild("HumanoidRootPart") end
 
--- Hàm kiểm tra đồng đội (Chung cho ESP và Aimbot)
 local function IsEnemy(player)
     if player == LocalPlayer then return false end
-    -- Nếu cả 2 đều có team và giống nhau -> là đồng đội
-    if player.Team and LocalPlayer.Team and player.Team == LocalPlayer.Team then
-        return false
-    end
+    if player.Team and LocalPlayer.Team and player.Team == LocalPlayer.Team then return false end
     return true
 end
 
 local function AddESP(m)
-    if ESPObjects[m] then return end 
-    local root = m:FindFirstChild("HumanoidRootPart") 
-    if not root then return end
-    
+    if ESPObjects[m] then return end local root = m:FindFirstChild("HumanoidRootPart") if not root then return end
     local isPlayer = IsPlayerChar(m)
-    
-    -- Lọc màu sắc: Địch màu Đỏ, Đồng minh màu Lục (hoặc Xanh lơ)
-    local espColor = Color3.fromRGB(255,50,50) -- Quái/Địch mặc định màu đỏ
+    local espColor = Color3.fromRGB(255,50,50)
     if isPlayer then
         local plr = Players:GetPlayerFromCharacter(m)
-        if plr and not IsEnemy(plr) then
-            espColor = Color3.fromRGB(50,255,255) -- Đồng đội màu Cyan
-        end
+        if plr and not IsEnemy(plr) then espColor = Color3.fromRGB(50,255,255) end
     end
 
-    local hl = Instance.new("Highlight") 
-    hl.FillColor = espColor hl.OutlineColor = Color3.fromRGB(255,255,255) hl.FillTransparency = 0.4 hl.OutlineTransparency = 0 hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-    hl.Enabled = ESPHighlightOn
-    hl.Parent = m
-    
-    local box = Instance.new("BoxHandleAdornment")
-    box.Size = Vector3.new(4, 5.5, 2) box.Adornee = root box.AlwaysOnTop = true box.ZIndex = 10 box.Color3 = espColor box.Transparency = 0.4
-    box.Visible = ESPBoxOn
-    box.Parent = TargetGui
-
+    local hl = Instance.new("Highlight") hl.FillColor = espColor hl.OutlineColor = Color3.fromRGB(255,255,255) hl.FillTransparency = 0.4 hl.OutlineTransparency = 0 hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop hl.Enabled = ESPHighlightOn hl.Parent = m
+    local box = Instance.new("BoxHandleAdornment") box.Size = Vector3.new(4, 5.5, 2) box.Adornee = root box.AlwaysOnTop = true box.ZIndex = 10 box.Color3 = espColor box.Transparency = 0.4 box.Visible = ESPBoxOn box.Parent = TargetGui
     local bb = Instance.new("BillboardGui") bb.Adornee = root bb.Size = UDim2.new(0,120,0,36) bb.StudsOffset = Vector3.new(0,3.5,0) bb.AlwaysOnTop = true bb.MaxDistance = 500 bb.Parent = TargetGui
     local nl = Instance.new("TextLabel", bb) nl.Size = UDim2.new(1,0,0.55,0) nl.BackgroundTransparency = 1 nl.Text = m.Name nl.TextColor3 = Color3.fromRGB(255,255,255) nl.TextSize = 13 nl.Font = Enum.Font.GothamBold nl.TextStrokeTransparency = 0 nl.Visible = ESPNameOn
     local dl = Instance.new("TextLabel", bb) dl.Size = UDim2.new(1,0,0.45,0) dl.Position = UDim2.new(0,0,0.55,0) dl.BackgroundTransparency = 1 dl.Text = "0m" dl.TextColor3 = espColor dl.TextSize = 11 dl.Font = Enum.Font.Gotham dl.Visible = ESPDistOn
     
     ESPObjects[m] = {HL=hl, BOX=box, BB=bb, NL=nl, DL=dl}
-    m.AncestryChanged:Connect(function() 
-        if not m.Parent and ESPObjects[m] then pcall(function() hl:Destroy() box:Destroy() bb:Destroy() end) ESPObjects[m] = nil end 
-    end)
+    m.AncestryChanged:Connect(function() if not m.Parent and ESPObjects[m] then pcall(function() hl:Destroy() box:Destroy() bb:Destroy() end) ESPObjects[m] = nil end end)
 end
 
 local function ScanESP() for _, o in ipairs(Workspace:GetDescendants()) do if o:IsA("Model") and (IsNPC(o) or (ESPPlayerOn and IsPlayerChar(o))) then AddESP(o) end end end
@@ -159,16 +128,13 @@ local function StartESP()
             local hum = m:FindFirstChildOfClass("Humanoid") local nRoot = m:FindFirstChild("HumanoidRootPart")
             if not m.Parent or not nRoot or (hum and hum.Health <= 0) then pcall(function() d.HL:Destroy() if d.BOX then d.BOX:Destroy() end d.BB:Destroy() end) ESPObjects[m] = nil continue end
             if nRoot.Transparency == 1 then nRoot.Transparency = 0.99 end
-            if d.HL then d.HL.Enabled = ESPHighlightOn end
-            if d.BOX then d.BOX.Visible = ESPBoxOn end
-            if d.NL then d.NL.Visible = ESPNameOn end
-            if d.DL then d.DL.Visible = ESPDistOn end
+            if d.HL then d.HL.Enabled = ESPHighlightOn end if d.BOX then d.BOX.Visible = ESPBoxOn end if d.NL then d.NL.Visible = ESPNameOn end if d.DL then d.DL.Visible = ESPDistOn end
             if myRoot and d.DL then d.DL.Text = math.floor((myRoot.Position - nRoot.Position).Magnitude).."m" end
         end
     end))
 end
 
--- ================== AIMBOT (3 CHẾ ĐỘ & CHỐNG TEAMKILL) ==================
+-- ================== AIMBOT BẢO MẬT KÉP ==================
 local lastCacheUpdate = 0
 local function UpdateAimbotState()
     local anyOn = AutoAimbotOn or ManualAimbotOn or PlayerAimbotOn
@@ -183,24 +149,17 @@ local function UpdateAimbotState()
         if tick() - lastCacheUpdate > 0.5 then
             lastCacheUpdate = tick()
             local newCache = {}
-            
-            -- Chế độ 1: Ưu tiên Người chơi
             if PlayerAimbotOn then
                 for _, p in ipairs(Players:GetPlayers()) do
                     if p ~= LocalPlayer and p.Character then
-                        -- Kiểm tra đồng đội
                         local isEnemy = true
                         if IgnoreTeammates and not IsEnemy(p) then isEnemy = false end
-                        
                         if isEnemy then
-                            local r = p.Character:FindFirstChild("HumanoidRootPart")
-                            local h = p.Character:FindFirstChildOfClass("Humanoid")
+                            local r = p.Character:FindFirstChild("HumanoidRootPart") local h = p.Character:FindFirstChildOfClass("Humanoid")
                             if r and h and h.Health > 0 then table.insert(newCache, r) end
                         end
                     end
                 end
-                
-            -- Chế độ 2: Đánh thủ công theo tên đã chọn
             elseif ManualAimbotOn and SelectedMobName ~= "" then
                 for _, o in ipairs(Workspace:GetDescendants()) do
                     if o:IsA("Model") and o.Name == SelectedMobName then
@@ -208,8 +167,6 @@ local function UpdateAimbotState()
                         if r and h and h.Health > 0 then table.insert(newCache, r) end
                     end
                 end
-                
-            -- Chế độ 3: Tự động đánh quái vật gần nhất
             elseif AutoAimbotOn then
                 local function check(o)
                     if o:IsA("Model") and not Players:GetPlayerFromCharacter(o) then
@@ -231,12 +188,24 @@ local function UpdateAimbotState()
         local myRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
         if not myRoot then return end
         local nearestDist = 5000 local nearestTgt = nil
+        
         for _, rootPart in ipairs(TargetCache) do
             if rootPart and rootPart.Parent then
-                local h = rootPart.Parent:FindFirstChildOfClass("Humanoid")
+                local char = rootPart.Parent
+                local h = char:FindFirstChildOfClass("Humanoid")
+                
                 if h and h.Health > 0 then
-                    local d = (myRoot.Position - rootPart.Position).Magnitude
-                    if d < nearestDist then nearestDist = d nearestTgt = rootPart end
+                    -- LỚP BẢO MẬT KÉP CUỐI CÙNG (Cấm camera lia trúng đồng đội)
+                    local isAlly = false
+                    if IgnoreTeammates then
+                        local p = Players:GetPlayerFromCharacter(char)
+                        if p and not IsEnemy(p) then isAlly = true end
+                    end
+                    
+                    if not isAlly then
+                        local d = (myRoot.Position - rootPart.Position).Magnitude
+                        if d < nearestDist then nearestDist = d nearestTgt = rootPart end
+                    end
                 end
             end
         end
@@ -264,7 +233,7 @@ Main.InputChanged:Connect(function(i) if drag and i.UserInputType == Enum.UserIn
 Main.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then drag=false end end)
 
 local TitleBar = Create("Frame", Main, {Size=UDim2.new(1,0,0,40), BackgroundColor3=C.Panel, BackgroundTransparency=0.5})
-local TitleText = Create("TextLabel", TitleBar, {Size=UDim2.new(1,-80,1,0), Position=UDim2.new(0,16,0,0), BackgroundTransparency=1, Text="Natsumi Client v5.5", Font=Enum.Font.GothamBlack, TextSize=15, TextXAlignment=Enum.TextXAlignment.Left}) AddGradient(TitleText)
+local TitleText = Create("TextLabel", TitleBar, {Size=UDim2.new(1,-80,1,0), Position=UDim2.new(0,16,0,0), BackgroundTransparency=1, Text="Natsumi Client v5.6", Font=Enum.Font.GothamBlack, TextSize=15, TextXAlignment=Enum.TextXAlignment.Left}) AddGradient(TitleText)
 local CloseBtn = Create("TextButton", TitleBar, {Size=UDim2.new(0,28,0,28), Position=UDim2.new(1,-34,0.5,-14), BackgroundColor3=Color3.fromRGB(35,35,45), Text="✕", TextColor3=C.Text, Font=Enum.Font.GothamBold}) Corner(CloseBtn, 8)
 CloseBtn.MouseButton1Click:Connect(function() SmoothTween(Main, {Size=UDim2.new(0,0,0,0)}, 0.3) task.wait(0.3) Main.Visible=false UIVisible=false end)
 
@@ -315,7 +284,7 @@ MakeTitle(T_Boost, "ĐỔI MÀU LOW-POLY")
 local colors = { {"Trắng Xám", Color3.fromRGB(200,200,200)}, {"Xanh Rêu", Color3.fromRGB(100,160,100)}, {"Màu Đất", Color3.fromRGB(200,185,155)}, {"Màu Đen Ám", Color3.fromRGB(30,30,35)} }
 for _, c in ipairs(colors) do MakeBtn(T_Boost, c[1], function() FLAT_COLOR = c[2] if TextureRemoved then for o in pairs(SavedParts) do if o and o.Parent and o:IsA("BasePart") then SmoothTween(o, {Color=FLAT_COLOR}) end end end end) end
 
--- 3. TAB COMBAT (ĐÃ BỔ SUNG TÍNH NĂNG ĐỒNG ĐỘI)
+-- 3. TAB COMBAT
 MakeTitle(T_ESP, "🔥 CHẾ ĐỘ AIMBOT CHUYÊN SÂU")
 MakeToggle(T_ESP, "🤝 Bỏ Qua Đồng Đội (Anti-Teamkill)", true, function(v) IgnoreTeammates = v end)
 MakeToggle(T_ESP, "👤 Aimbot Người Chơi Khác (PvP)", false, function(v) PlayerAimbotOn = v UpdateAimbotState() end)
@@ -393,4 +362,4 @@ LocalPlayer.AncestryChanged:Connect(function() for _, c in ipairs(AllConns) do i
 
 Main.Size = UDim2.new(0,0,0,0) SmoothTween(Main, {Size=UDim2.new(0,350,0,460)}, 0.5)
 
-print("✅ Natsumi Lag v5.5 (Anti-Teamkill) Loaded!")
+print("✅ Natsumi Lag v5.6 (Absolute Anti-Teamkill) Loaded!")
