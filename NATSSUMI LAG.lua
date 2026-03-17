@@ -106,17 +106,55 @@ local function IsPlayerChar(m) for _, p in ipairs(Players:GetPlayers()) do if p.
 local function IsNPC(m) return not IsPlayerChar(m) and m:FindFirstChildOfClass("Humanoid") and m:FindFirstChild("HumanoidRootPart") end
 
 local function AddESP(m)
-    if ESPObjects[m] then return end local root = m:FindFirstChild("HumanoidRootPart") if not root then return end
-    local hl = Instance.new("Highlight", m) hl.FillColor = IsPlayerChar(m) and Color3.fromRGB(50,255,50) or Color3.fromRGB(255,50,50) hl.OutlineColor = Color3.fromRGB(255,220,0) hl.FillTransparency = 0.5 hl.OutlineTransparency = 0 hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    if ESPObjects[m] then return end 
+    local root = m:FindFirstChild("HumanoidRootPart") 
+    if not root then return end
+    
+    local isPlayer = IsPlayerChar(m)
+    local espColor = isPlayer and Color3.fromRGB(50,255,50) or Color3.fromRGB(255,50,50)
+
+    -- Hiệu ứng viền (Sẽ bị ẩn nếu người chơi tàng hình)
+    local hl = Instance.new("Highlight", m) 
+    hl.FillColor = espColor 
+    hl.OutlineColor = Color3.fromRGB(255,220,0) 
+    hl.FillTransparency = 0.5 
+    hl.OutlineTransparency = 0 
+    hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    
+    -- Khối hộp 3D (Luôn hiện dù tàng hình)
+    local box = Instance.new("BoxHandleAdornment")
+    box.Size = Vector3.new(4, 5.5, 2)
+    box.Adornee = root
+    box.AlwaysOnTop = true
+    box.ZIndex = 10
+    box.Color3 = espColor
+    box.Transparency = 0.6
+    box.Parent = root
+
+    -- Tên và Khoảng cách
     local bb = Instance.new("BillboardGui", m) bb.Adornee = root bb.Size = UDim2.new(0,120,0,36) bb.StudsOffset = Vector3.new(0,3.5,0) bb.AlwaysOnTop = true bb.MaxDistance = 500
     local nl = Instance.new("TextLabel", bb) nl.Size = UDim2.new(1,0,0.55,0) nl.BackgroundTransparency = 1 nl.Text = m.Name nl.TextColor3 = Color3.fromRGB(255,255,255) nl.TextSize = 13 nl.Font = Enum.Font.GothamBold nl.TextStrokeTransparency = 0 nl.Visible = ESPNameOn
     local dl = Instance.new("TextLabel", bb) dl.Size = UDim2.new(1,0,0.45,0) dl.Position = UDim2.new(0,0,0.55,0) dl.BackgroundTransparency = 1 dl.Text = "0m" dl.TextColor3 = Color3.fromRGB(0,255,255) dl.TextSize = 11 dl.Font = Enum.Font.Gotham dl.Visible = ESPDistOn
-    ESPObjects[m] = {HL=hl, BB=bb, NL=nl, DL=dl}
-    m.AncestryChanged:Connect(function() if not m.Parent and ESPObjects[m] then pcall(function() hl:Destroy() bb:Destroy() end) ESPObjects[m] = nil end end)
+    
+    ESPObjects[m] = {HL=hl, BOX=box, BB=bb, NL=nl, DL=dl}
+    m.AncestryChanged:Connect(function() 
+        if not m.Parent and ESPObjects[m] then 
+            pcall(function() hl:Destroy() box:Destroy() bb:Destroy() end) 
+            ESPObjects[m] = nil 
+        end 
+    end)
 end
 
 local function ScanESP() for _, o in ipairs(Workspace:GetDescendants()) do if o:IsA("Model") and (IsNPC(o) or (ESPPlayerOn and IsPlayerChar(o))) then AddESP(o) end end end
-local function StopESP() ESPEnabled = false for m, d in pairs(ESPObjects) do pcall(function() d.HL:Destroy() d.BB:Destroy() end) end ESPObjects = {} if ESPWatcher then ESPWatcher:Disconnect() ESPWatcher=nil end if ESPLoop then ESPLoop:Disconnect() ESPLoop=nil end end
+
+local function StopESP() 
+    ESPEnabled = false 
+    for m, d in pairs(ESPObjects) do pcall(function() d.HL:Destroy() if d.BOX then d.BOX:Destroy() end d.BB:Destroy() end) end 
+    ESPObjects = {} 
+    if ESPWatcher then ESPWatcher:Disconnect() ESPWatcher=nil end 
+    if ESPLoop then ESPLoop:Disconnect() ESPLoop=nil end 
+end
+
 local function StartESP()
     ESPEnabled = true ScanESP()
     ESPWatcher = Track(Workspace.DescendantAdded:Connect(function(o) if o:IsA("Model") then task.wait(0.5) if IsNPC(o) or (ESPPlayerOn and IsPlayerChar(o)) then AddESP(o) end end end))
@@ -124,7 +162,7 @@ local function StartESP()
         local myRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
         for m, d in pairs(ESPObjects) do
             local hum = m:FindFirstChildOfClass("Humanoid") local nRoot = m:FindFirstChild("HumanoidRootPart")
-            if not m.Parent or not nRoot or (hum and hum.Health <= 0) then pcall(function() d.HL:Destroy() d.BB:Destroy() end) ESPObjects[m] = nil continue end
+            if not m.Parent or not nRoot or (hum and hum.Health <= 0) then pcall(function() d.HL:Destroy() if d.BOX then d.BOX:Destroy() end d.BB:Destroy() end) ESPObjects[m] = nil continue end
             if myRoot and d.DL then d.DL.Text = math.floor((myRoot.Position - nRoot.Position).Magnitude).."m" d.DL.Visible = ESPDistOn end
             if d.NL then d.NL.Visible = ESPNameOn end
         end
