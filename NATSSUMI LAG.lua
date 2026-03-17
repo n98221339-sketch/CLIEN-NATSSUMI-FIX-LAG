@@ -1,6 +1,6 @@
 -- ============================================================
--- NATSUMI LAG CLIENT v5.4 - PRO AIMBOT MODES
--- (Đa chế độ Aimbot: Người Chơi / Thủ Công / Tự Động)
+-- NATSUMI LAG CLIENT v5.5 - ANTI TEAMKILL
+-- (Không Aimbot đồng đội + Giao diện siêu mượt)
 -- ============================================================
 
 if not game:IsLoaded() then game.Loaded:Wait() end
@@ -31,8 +31,8 @@ local ESPEnabled, ESPPlayerOn = false, false
 local ESPNameOn, ESPDistOn, ESPBoxOn, ESPHighlightOn = true, true, true, true
 local ESPObjects, ESPWatcher, ESPLoop = {}, nil, nil
 
--- Biến quản lý Đa Chế Độ Aimbot
 local AutoAimbotOn, ManualAimbotOn, PlayerAimbotOn = false, false, false
+local IgnoreTeammates = true -- Biến chống bắn đồng đội
 local SelectedMobName, AimTarget = "", nil
 local AimScanConn, AimCamConn = nil, nil
 local TargetCache = {}
@@ -98,9 +98,19 @@ local function ApplyBoost(level)
     if level == 100 then RemoveTextures() Lighting.Brightness = 2 Lighting.ClockTime = 14 Lighting.FogEnd = 250 settings().Rendering.QualityLevel = Enum.QualityLevel.Level01 CurrentBoost = 100 end
 end
 
--- ================== ESP (CUSTOM ĐẦY ĐỦ) ==================
+-- ================== ESP (CUSTOM & ANTI-INVISIBLE) ==================
 local function IsPlayerChar(m) for _, p in ipairs(Players:GetPlayers()) do if p.Character == m and p ~= LocalPlayer then return true end end return false end
 local function IsNPC(m) return not IsPlayerChar(m) and m:FindFirstChildOfClass("Humanoid") and m:FindFirstChild("HumanoidRootPart") end
+
+-- Hàm kiểm tra đồng đội (Chung cho ESP và Aimbot)
+local function IsEnemy(player)
+    if player == LocalPlayer then return false end
+    -- Nếu cả 2 đều có team và giống nhau -> là đồng đội
+    if player.Team and LocalPlayer.Team and player.Team == LocalPlayer.Team then
+        return false
+    end
+    return true
+end
 
 local function AddESP(m)
     if ESPObjects[m] then return end 
@@ -108,7 +118,15 @@ local function AddESP(m)
     if not root then return end
     
     local isPlayer = IsPlayerChar(m)
-    local espColor = isPlayer and Color3.fromRGB(50,255,50) or Color3.fromRGB(255,50,50)
+    
+    -- Lọc màu sắc: Địch màu Đỏ, Đồng minh màu Lục (hoặc Xanh lơ)
+    local espColor = Color3.fromRGB(255,50,50) -- Quái/Địch mặc định màu đỏ
+    if isPlayer then
+        local plr = Players:GetPlayerFromCharacter(m)
+        if plr and not IsEnemy(plr) then
+            espColor = Color3.fromRGB(50,255,255) -- Đồng đội màu Cyan
+        end
+    end
 
     local hl = Instance.new("Highlight") 
     hl.FillColor = espColor hl.OutlineColor = Color3.fromRGB(255,255,255) hl.FillTransparency = 0.4 hl.OutlineTransparency = 0 hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
@@ -131,41 +149,26 @@ local function AddESP(m)
 end
 
 local function ScanESP() for _, o in ipairs(Workspace:GetDescendants()) do if o:IsA("Model") and (IsNPC(o) or (ESPPlayerOn and IsPlayerChar(o))) then AddESP(o) end end end
-
-local function StopESP() 
-    ESPEnabled = false 
-    for m, d in pairs(ESPObjects) do pcall(function() d.HL:Destroy() if d.BOX then d.BOX:Destroy() end d.BB:Destroy() end) end 
-    ESPObjects = {} 
-    if ESPWatcher then ESPWatcher:Disconnect() ESPWatcher=nil end 
-    if ESPLoop then ESPLoop:Disconnect() ESPLoop=nil end 
-end
-
+local function StopESP() ESPEnabled = false for m, d in pairs(ESPObjects) do pcall(function() d.HL:Destroy() if d.BOX then d.BOX:Destroy() end d.BB:Destroy() end) end ESPObjects = {} if ESPWatcher then ESPWatcher:Disconnect() ESPWatcher=nil end if ESPLoop then ESPLoop:Disconnect() ESPLoop=nil end end
 local function StartESP()
     ESPEnabled = true ScanESP()
     ESPWatcher = Track(Workspace.DescendantAdded:Connect(function(o) if o:IsA("Model") then task.wait(0.5) if IsNPC(o) or (ESPPlayerOn and IsPlayerChar(o)) then AddESP(o) end end end))
     ESPLoop = Track(RunService.Heartbeat:Connect(function()
         local myRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
         for m, d in pairs(ESPObjects) do
-            local hum = m:FindFirstChildOfClass("Humanoid") 
-            local nRoot = m:FindFirstChild("HumanoidRootPart")
-            
-            if not m.Parent or not nRoot or (hum and hum.Health <= 0) then 
-                pcall(function() d.HL:Destroy() if d.BOX then d.BOX:Destroy() end d.BB:Destroy() end) ESPObjects[m] = nil continue 
-            end
-            
+            local hum = m:FindFirstChildOfClass("Humanoid") local nRoot = m:FindFirstChild("HumanoidRootPart")
+            if not m.Parent or not nRoot or (hum and hum.Health <= 0) then pcall(function() d.HL:Destroy() if d.BOX then d.BOX:Destroy() end d.BB:Destroy() end) ESPObjects[m] = nil continue end
             if nRoot.Transparency == 1 then nRoot.Transparency = 0.99 end
-            
             if d.HL then d.HL.Enabled = ESPHighlightOn end
             if d.BOX then d.BOX.Visible = ESPBoxOn end
             if d.NL then d.NL.Visible = ESPNameOn end
             if d.DL then d.DL.Visible = ESPDistOn end
-            
             if myRoot and d.DL then d.DL.Text = math.floor((myRoot.Position - nRoot.Position).Magnitude).."m" end
         end
     end))
 end
 
--- ================== AIMBOT 3 CHẾ ĐỘ ==================
+-- ================== AIMBOT (3 CHẾ ĐỘ & CHỐNG TEAMKILL) ==================
 local lastCacheUpdate = 0
 local function UpdateAimbotState()
     local anyOn = AutoAimbotOn or ManualAimbotOn or PlayerAimbotOn
@@ -175,8 +178,7 @@ local function UpdateAimbotState()
         AimTarget = nil return 
     end
     
-    if AimScanConn then return end -- Đã chạy loop rồi thì tự đổi chế độ
-    
+    if AimScanConn then return end 
     AimScanConn = Track(RunService.Heartbeat:Connect(function()
         if tick() - lastCacheUpdate > 0.5 then
             lastCacheUpdate = tick()
@@ -186,9 +188,15 @@ local function UpdateAimbotState()
             if PlayerAimbotOn then
                 for _, p in ipairs(Players:GetPlayers()) do
                     if p ~= LocalPlayer and p.Character then
-                        local r = p.Character:FindFirstChild("HumanoidRootPart")
-                        local h = p.Character:FindFirstChildOfClass("Humanoid")
-                        if r and h and h.Health > 0 then table.insert(newCache, r) end
+                        -- Kiểm tra đồng đội
+                        local isEnemy = true
+                        if IgnoreTeammates and not IsEnemy(p) then isEnemy = false end
+                        
+                        if isEnemy then
+                            local r = p.Character:FindFirstChild("HumanoidRootPart")
+                            local h = p.Character:FindFirstChildOfClass("Humanoid")
+                            if r and h and h.Health > 0 then table.insert(newCache, r) end
+                        end
                     end
                 end
                 
@@ -196,8 +204,7 @@ local function UpdateAimbotState()
             elseif ManualAimbotOn and SelectedMobName ~= "" then
                 for _, o in ipairs(Workspace:GetDescendants()) do
                     if o:IsA("Model") and o.Name == SelectedMobName then
-                        local r = o:FindFirstChild("HumanoidRootPart") 
-                        local h = o:FindFirstChildOfClass("Humanoid")
+                        local r = o:FindFirstChild("HumanoidRootPart") local h = o:FindFirstChildOfClass("Humanoid")
                         if r and h and h.Health > 0 then table.insert(newCache, r) end
                     end
                 end
@@ -206,17 +213,14 @@ local function UpdateAimbotState()
             elseif AutoAimbotOn then
                 local function check(o)
                     if o:IsA("Model") and not Players:GetPlayerFromCharacter(o) then
-                        local r = o:FindFirstChild("HumanoidRootPart")
-                        local h = o:FindFirstChildOfClass("Humanoid")
+                        local r = o:FindFirstChild("HumanoidRootPart") local h = o:FindFirstChildOfClass("Humanoid")
                         if r and h and h.Health > 0 then table.insert(newCache, r) end
                     end
                 end
                 for _, folder in ipairs(Workspace:GetChildren()) do
                     if folder.Name == "Enemies" or folder.Name == "NPCs" or folder.Name == "Bosses" or folder.Name == "Mobs" then
                         for _, mob in ipairs(folder:GetChildren()) do check(mob) end
-                    else
-                        check(folder)
-                    end
+                    else check(folder) end
                 end
             end
             TargetCache = newCache
@@ -226,8 +230,7 @@ local function UpdateAimbotState()
     AimCamConn = Track(RunService.RenderStepped:Connect(function()
         local myRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
         if not myRoot then return end
-        local nearestDist = 5000 
-        local nearestTgt = nil
+        local nearestDist = 5000 local nearestTgt = nil
         for _, rootPart in ipairs(TargetCache) do
             if rootPart and rootPart.Parent then
                 local h = rootPart.Parent:FindFirstChildOfClass("Humanoid")
@@ -261,7 +264,7 @@ Main.InputChanged:Connect(function(i) if drag and i.UserInputType == Enum.UserIn
 Main.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then drag=false end end)
 
 local TitleBar = Create("Frame", Main, {Size=UDim2.new(1,0,0,40), BackgroundColor3=C.Panel, BackgroundTransparency=0.5})
-local TitleText = Create("TextLabel", TitleBar, {Size=UDim2.new(1,-80,1,0), Position=UDim2.new(0,16,0,0), BackgroundTransparency=1, Text="Natsumi Client v5.4", Font=Enum.Font.GothamBlack, TextSize=15, TextXAlignment=Enum.TextXAlignment.Left}) AddGradient(TitleText)
+local TitleText = Create("TextLabel", TitleBar, {Size=UDim2.new(1,-80,1,0), Position=UDim2.new(0,16,0,0), BackgroundTransparency=1, Text="Natsumi Client v5.5", Font=Enum.Font.GothamBlack, TextSize=15, TextXAlignment=Enum.TextXAlignment.Left}) AddGradient(TitleText)
 local CloseBtn = Create("TextButton", TitleBar, {Size=UDim2.new(0,28,0,28), Position=UDim2.new(1,-34,0.5,-14), BackgroundColor3=Color3.fromRGB(35,35,45), Text="✕", TextColor3=C.Text, Font=Enum.Font.GothamBold}) Corner(CloseBtn, 8)
 CloseBtn.MouseButton1Click:Connect(function() SmoothTween(Main, {Size=UDim2.new(0,0,0,0)}, 0.3) task.wait(0.3) Main.Visible=false UIVisible=false end)
 
@@ -302,7 +305,7 @@ local stFPS = Create("TextLabel", Create("Frame", T_Stats, {LayoutOrder=GetOrder
 local stPing = Create("TextLabel", Create("Frame", T_Stats, {LayoutOrder=GetOrder(), Size=UDim2.new(0,320,0,32), BackgroundColor3=C.Panel}), {Size=UDim2.new(1,0,1,0), BackgroundTransparency=1, TextColor3=C.Text, Font=Enum.Font.GothamBold, TextSize=13}) Corner(stPing.Parent, 8)
 Track(RunService.Heartbeat:Connect(function() stFPS.Text=" 🖥 FPS Hiện Tại: "..CurrentFPS stPing.Text=" 📡 Độ Trễ (Ping): "..GetPing().." ms" end))
 MakeTitle(T_Stats, "TỐI ƯU HÓA")
-MakeBtn(T_Stats, "🚀 Tối Ưu Mạng & Giảm Delay (Clear Debris)", function() OptimizePing() end)
+MakeBtn(T_Stats, "🚀 Tối Ưu Mạng & Giảm Delay", function() OptimizePing() end)
 MakeToggle(T_Stats, "Hiện FPS Mini trên Màn Hình", false, function(v) FPSVisible=v if _G.NF then _G.NF.Enabled=v end end)
 
 -- 2. TAB GIẢM LAG
@@ -312,11 +315,12 @@ MakeTitle(T_Boost, "ĐỔI MÀU LOW-POLY")
 local colors = { {"Trắng Xám", Color3.fromRGB(200,200,200)}, {"Xanh Rêu", Color3.fromRGB(100,160,100)}, {"Màu Đất", Color3.fromRGB(200,185,155)}, {"Màu Đen Ám", Color3.fromRGB(30,30,35)} }
 for _, c in ipairs(colors) do MakeBtn(T_Boost, c[1], function() FLAT_COLOR = c[2] if TextureRemoved then for o in pairs(SavedParts) do if o and o.Parent and o:IsA("BasePart") then SmoothTween(o, {Color=FLAT_COLOR}) end end end end) end
 
--- 3. TAB COMBAT (CHẾ ĐỘ AIMBOT MỚI)
+-- 3. TAB COMBAT (ĐÃ BỔ SUNG TÍNH NĂNG ĐỒNG ĐỘI)
 MakeTitle(T_ESP, "🔥 CHẾ ĐỘ AIMBOT CHUYÊN SÂU")
-MakeToggle(T_ESP, "👤 Aimbot Người Chơi (Ưu tiên PvP)", false, function(v) PlayerAimbotOn = v UpdateAimbotState() end)
-MakeToggle(T_ESP, "🎯 Aimbot Thủ Công (Đánh theo tên)", false, function(v) ManualAimbotOn = v UpdateAimbotState() end)
-MakeToggle(T_ESP, "🤖 Aimbot Tự Động (Gần Nhất)", false, function(v) AutoAimbotOn = v UpdateAimbotState() end)
+MakeToggle(T_ESP, "🤝 Bỏ Qua Đồng Đội (Anti-Teamkill)", true, function(v) IgnoreTeammates = v end)
+MakeToggle(T_ESP, "👤 Aimbot Người Chơi Khác (PvP)", false, function(v) PlayerAimbotOn = v UpdateAimbotState() end)
+MakeToggle(T_ESP, "🤖 Aimbot Tự Động Gần Nhất (Auto)", false, function(v) AutoAimbotOn = v UpdateAimbotState() end)
+MakeToggle(T_ESP, "🎯 Aimbot Thủ Công (Đánh Theo Tên)", false, function(v) ManualAimbotOn = v UpdateAimbotState() end)
 
 MakeTitle(T_ESP, "DANH SÁCH MỤC TIÊU THỦ CÔNG")
 local SelectedLbl = Create("TextLabel", Create("Frame", T_ESP, {LayoutOrder=GetOrder(), Size=UDim2.new(0,320,0,28), BackgroundColor3=C.Panel}), {Size=UDim2.new(1,0,1,0), BackgroundTransparency=1, Text="Đang Chọn: Trống", TextColor3=C.Grad1, Font=Enum.Font.GothamBold, TextSize=13}) Corner(SelectedLbl.Parent, 8)
@@ -389,4 +393,4 @@ LocalPlayer.AncestryChanged:Connect(function() for _, c in ipairs(AllConns) do i
 
 Main.Size = UDim2.new(0,0,0,0) SmoothTween(Main, {Size=UDim2.new(0,350,0,460)}, 0.5)
 
-print("✅ Natsumi Lag v5.4 (Pro Modes) Loaded!")
+print("✅ Natsumi Lag v5.5 (Anti-Teamkill) Loaded!")
